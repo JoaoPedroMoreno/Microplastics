@@ -1,11 +1,12 @@
 import pandas as pd
 import plotly.graph_objects as go
 import re
+import numpy as np
 
 def plotar_grafico_csv(fig, caminho_arquivo, legenda):
     # Inicializar variáveis para armazenar os dados
-    dados = {'Freq': [], 'S12': []}
-
+    dados = {'Freq': [],'Agua':[], '0,1g/L': [], '0,5g/L': [], '0,75g/L': [], '1,0g/L': []}
+    legenda = ['Agua', '0,1g/L', '0,5g/L', '0,75g/L', '1,0g/L']
     # Flag para indicar quando começar a coletar dados
     coletar_dados = False
 
@@ -13,16 +14,22 @@ def plotar_grafico_csv(fig, caminho_arquivo, legenda):
     with open(caminho_arquivo, 'r') as file:
         for linha in file:
             # Verificar se a linha começa com '! CORRECTION2 ON U', indicando o início dos dados
-            if linha.startswith('! CORRECTION2 ON U'):
+            if linha.startswith('%freq[Hz]'):
                 coletar_dados = True
-            elif coletar_dados and not linha.startswith(('BEGIN', '!', 'END')) and linha.strip():
-                # Ignorar linhas que começam com '!' e linhas em branco
+            elif coletar_dados  and linha.strip(): # Ignorar linhas em branco
                 # Dividir a linha em valores e armazenar nas listas apropriadas
                 valores = linha.strip().split(',')
-                freq_ghz = float(valores[0]) / 1e9
-                dados['Freq'].append(freq_ghz)
-                dados['S12'].append(float(valores[1]))
-            elif coletar_dados and linha.startswith('END'):
+                valores = [float(valor) for valor in valores if valor]
+                freq_ghz = valores[0] / 1e9
+                # S12 = mag2db(abs(re_Trc14_S21 + 1i * im_Trc14_S21))
+                agua = 20 * np.log10(abs(valores[1] + 1j * valores[2]))
+                gL_0_1 = 20 * np.log10(abs(valores[3] + 1j * valores[4]))
+                gL_0_5 = 20 * np.log10(abs(valores[5] + 1j * valores[6]))
+                gL_0_75 = 20 * np.log10(abs(valores[7] + 1j * valores[8]))
+                gL_1_0 = 20 * np.log10(abs(valores[9] + 1j * valores[10]))
+                dados['Freq'].append(freq_ghz); dados['Agua'].append(agua); dados['0,1g/L'].append(gL_0_1)
+                dados['0,5g/L'].append(gL_0_5); dados['0,75g/L'].append(gL_0_75); dados['1,0g/L'].append(gL_1_0)
+            elif coletar_dados and not linha.strip():
                 # Se encontrar a linha 'END', parar a coleta de dados
                 break
 
@@ -30,21 +37,16 @@ def plotar_grafico_csv(fig, caminho_arquivo, legenda):
     df = pd.DataFrame(dados)
 
     # Adicionar linha ao gráfico
-    fig.add_trace(go.Scatter(x=df['Freq'], y=df['S12'], mode='lines', name=legenda, line=dict(width=1.5)))
+    for i in range(0, 4):
+        fig.add_trace(go.Scatter(x=df['Freq'], y=df[legenda[i]], mode='lines', name=legenda[i], line=dict(width=1.5)))
 
     return df
 # Criar figura Plotly
 fig = go.Figure()
 
-arquivos = ['RESS5(1)-AGUA.csv', 'RESS5(1)-GAP0.csv', 'RESS5(1)-GAP1.csv', 'RESS5(1)-GAP2.csv',
-            'RESS5(1)-GAP3.csv', 'RESS5(1)-GAP4.csv', 'RESS5(1)-GAP5.csv', 'RESS5(1)-GAP6.csv', 'RESS5(1)-GAP7.csv']
+arquivos = ['Cap1-Copo(2).dat']
 
-# Extrair o número do ressoador e o número da medida do primeiro arquivo
-match = re.match(r'RESS(\d+)\((\d+)\)-', arquivos[0])
-if match:
-    ressoador = match.group(1)
-    medida = match.group(2)
-    titulo = f'Ressoador {ressoador} Medida {medida}'
+titulo = 'Capacitor 1 - Copo 2'
 
 # Arquivos CSV para serem plotados
 for arquivo in arquivos:
