@@ -23,7 +23,7 @@ def salvar_arquivo_dat(df, nome):
         # Escrever cabeçalho
         file.write('% Version 1.00\n')
         file.write('%\n')
-        file.write('%freq[Hz],re:Agua,im:Agua,re:concentracao 0,1g/L,im:concentracao 0,1g/L,re:concentracao 0,5g/L,im:concentracao 0,5g/L,re:concentracao 0,75g/L,im:concentracao 0,75g/L,re:concentracao 1,0g/L,im:concentracao 1,0g/L\n')
+        file.write('%freq[Hz],re:Agua,im:Agua,re:concentracao 0,1g/L,im:concentracao 0,1g/L,re:concentracao 0,5g/L,im:concentracao 0,5g/L,re:concentracao 1,0g/L,im:concentracao 1,0g/L\n')
 
         
         # Escrever dados
@@ -34,7 +34,7 @@ def gerar_df(arquivo_principal, arquivo_secundario):
     # Inicializar variáveis para armazenar os dados
     dados = {
         'Freq': [], 'Agua_RE': [], 'Agua_IM': [], '0,1g/L_RE': [], '0,1g/L_IM': [],
-        '0,5g/L_RE': [], '0,5g/L_IM': [],'0,75g/L_RE': [], '0,75g/L_IM': [],
+        '0,5g/L_RE': [], '0,5g/L_IM': [],
         '1,0g/L_RE': [], '1,0g/L_IM': []
     }
 
@@ -98,13 +98,12 @@ def gerar_df(arquivo_principal, arquivo_secundario):
     coletar_dados(arquivo_principal, 'Agua')
     coletar_dados(arquivo_principal, '0,1g/L')
     coletar_dados(arquivo_principal, '0,5g/L')
-    coletar_dados(arquivo_principal, '0,75g/L')
     coletar_dados(arquivo_principal, '1,0g/L')
 
     return pd.DataFrame(dados)
 
 # Caminhos dos arquivos
-arquivo_principal = 'Cap_Duto_300um(2).dat'
+arquivo_principal = 'Cap_Copo_300um(2).dat'
 arquivo_secundario = 'Cap2_Duto1_plstc_all.dat'
 
 # Adicionar dados

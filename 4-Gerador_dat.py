@@ -17,7 +17,7 @@ def gerar_df(arquivo_agua, arquivo0_1, arquivo0_5,arquivo0_75, arquivo1_0):
                     coletar_freq = True
                 elif coletar_freq and linha.strip():
                     valores_freq = linha.strip().split(',')
-                    freq_ghz = float(valores_freq[0]) / 1e9
+                    freq_ghz = float(valores_freq[0])
                     dados['Freq'].append(freq_ghz)
                 elif coletar_freq and not linha.strip():
                     break
