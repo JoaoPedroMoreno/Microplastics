@@ -1,6 +1,8 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import re
+import glob
 
 def plotar_grafico_csv(caminho_arquivo, legenda):
     # Inicializar variáveis para armazenar os dados
@@ -32,27 +34,63 @@ def plotar_grafico_csv(caminho_arquivo, legenda):
     # Exemplo de criação de um gráfico de linha com legenda
     plt.plot(df['Freq'], df['S12'], label=legenda, linewidth=0.5)
 
-arquivos = ['RESS4(2)-AGUA.csv', 'RESS4(2)-FNG1.csv', 'RESS4(2)-FNG2.csv',
-            'RESS4(2)-FNG3.csv', 'RESS4(2)-FNG4.csv', 'RESS4(2)-FNG5.csv', 'RESS4(2)-FNG6.csv', 'RESS4(2)-FNG7.csv']
+# Definir o caminho para o diretório onde os arquivos CSV estão armazenados
+diretorio_arquivos = os.path.join(os.getcwd(), 'Arquivos .csv', 'Medidas')
 
-# Extrair o número do ressoador e o número da medida do primeiro arquivo
-match = re.match(r'RESS(\d+)\((\d+)\)-', arquivos[0])
-if match:
-    ressoador = match.group(1)
-    medida = match.group(2)
-    titulo = f'Ressoador {ressoador} Medida {medida}'
+# Usar glob para listar todos os arquivos CSV no diretório especificado
+todos_arquivos = glob.glob(os.path.join(diretorio_arquivos, '*.csv'))
 
-# Arquivos CSV para serem plotados
-for arquivo in arquivos:
-    plotar_grafico_csv(arquivo, arquivo.split('-')[1].split('.')[0])
+# Pegar o número do Cap e o número dentro dos parênteses desejado através de um input
+num_cap = input("Digite a espessura do microplástico: ")
+num_parenteses = input("Digite o número da medida: ")
 
-# Adicionar legenda ao gráfico
-plt.legend()
+# Filtrar arquivos que atendem aos critérios
+arquivos_filtrados = [arquivo for arquivo in todos_arquivos if re.match(rf'Cap{num_cap}_pos\d+\({num_parenteses}\)\.csv', os.path.basename(arquivo))]
 
-# Adicionar título e rótulos dos eixos
-plt.title(f'{titulo}')
-plt.xlabel('Frequência (GHz)')
-plt.ylabel('S12 (dB)')
+# Adicionar o arquivo Cap5_agua.csv se ele existir
+if num_cap == '5':
+    arquivo_agua = os.path.join(diretorio_arquivos, 'Cap5_agua.csv')
+elif num_cap == '10':
+    arquivo_agua = os.path.join(diretorio_arquivos, 'Cap10_agua.csv')
 
-# Exibir o gráfico
-plt.show()
+if os.path.exists(arquivo_agua):
+    arquivos_filtrados.append(arquivo_agua)
+
+# Ordenar os arquivos filtrados pela posição
+arquivos_filtrados.sort(key=lambda x: int(re.search(r'_pos(\d+)\(', os.path.basename(x)).group(1)) if '_pos' in os.path.basename(x) else -1)
+# Verificar se algum arquivo foi encontrado
+if not arquivos_filtrados:
+    print("Nenhum arquivo encontrado com os critérios especificados.")
+else:
+    # Extrair o número do ressoador e o número da medida do primeiro arquivo
+    arquivo_referencia = os.path.basename(arquivos_filtrados[1])
+    match = re.match(r'Cap(\d+)_pos(\d+)\((\d+)\)', arquivo_referencia)
+    if match:
+        espessura = match.group(1)
+        if espessura == '5':
+            espessura = '0.5 mm'
+        elif espessura == '10':
+            espessura = '1 mm'
+        medida = match.group(3)
+        titulo = f'Microplastico de {espessura} Medida {medida}'
+
+    # Arquivos CSV para serem plotados
+    for arquivo in arquivos_filtrados:
+        base_name = os.path.basename(arquivo)
+        if base_name == 'Cap5_agua.csv' or base_name == 'Cap10_agua.csv':
+            legenda = 'Agua'
+        else:
+            pos_num = re.search(r'_pos(\d+)\(', base_name).group(1)
+            legenda = f'Posição {pos_num}'
+        plotar_grafico_csv(arquivo, legenda)
+
+    # Adicionar legenda ao gráfico
+    plt.legend()
+
+    # Adicionar título e rótulos dos eixos
+    plt.title(titulo)
+    plt.xlabel('Frequência (GHz)')
+    plt.ylabel('S12 (dB)')
+
+    # Exibir o gráfico
+    plt.show()

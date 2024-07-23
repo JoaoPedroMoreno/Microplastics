@@ -1,82 +1,119 @@
+import os
 import pandas as pd
 import plotly.graph_objects as go
 import re
+import glob
 
+def processar_arquivo_csv(caminho_arquivo):
+    dados = {'Freq': [], 'S12': []}
+    coletar_dados = False
+    with open(caminho_arquivo, 'r') as file:
+        for linha in file:
+            if linha.startswith('! CORRECTION2 ON U'):
+                coletar_dados = True
+            elif coletar_dados and not linha.startswith(('BEGIN', '!', 'END')) and linha.strip():
+                valores = linha.strip().split(',')
+                dados['Freq'].append(float(valores[0]))
+                dados['S12'].append(float(valores[1]))
+            elif coletar_dados and linha.startswith('END'):
+                break
+    return pd.DataFrame(dados)
 
-def plotar_grafico_csv(caminho_arquivo_agua, caminho_arquivos_microplasticos):
-    # Inicializar variáveis para armazenar os dados
-    dados_agua = {'Freq': [], 'S12': []}
-    dados_microplasticos = []
+def plotar_grafico_csv(fig, caminho_arquivo, legenda):
+    df = processar_arquivo_csv(caminho_arquivo)
+    fig.add_trace(go.Scatter(x=df['Freq'], y=df['S12'], mode='lines', name=legenda, line=dict(width=1.5)))
+    return df
 
-    # Função para processar um arquivo CSV e criar o DataFrame correspondente
-    def processar_arquivo_csv(caminho_arquivo):
-        dados = {'Freq': [], 'S12': []}
-        coletar_dados = False
-        with open(caminho_arquivo, 'r') as file:
-            for linha in file:
-                if linha.startswith('! CORRECTION2 ON U'):
-                    coletar_dados = True
-                elif coletar_dados and not linha.startswith(('BEGIN', '!', 'END')) and linha.strip():
-                    valores = linha.strip().split(',')
-                    dados['Freq'].append(float(valores[0]))
-                    dados['S12'].append(float(valores[1]))
-                elif coletar_dados and linha.startswith('END'):
-                    break
-        return pd.DataFrame(dados)
+def encontrar_frequencia_max_diff(df_agua, df_microplastico):
+    freq_diffs = {}
+    
+    for freq in df_agua['Freq']:
+        if freq in df_microplastico['Freq'].values:
+            s12_agua = df_agua[df_agua['Freq'] == freq]['S12'].values[0]
+            s12_micro = df_microplastico[df_microplastico['Freq'] == freq]['S12'].values[0]
+            diff = abs(s12_micro - s12_agua)
+            freq_diffs[freq] = diff
+    
+    max_diff_freq = max(freq_diffs, key=freq_diffs.get)
+    return max_diff_freq
 
-    # Processar o arquivo de água
-    dados_agua = processar_arquivo_csv(caminho_arquivo_agua)
-
-    # Processar os arquivos de microplástico
-    for caminho_arquivo_microplastico in caminho_arquivos_microplasticos:
-        dados_microplastico = processar_arquivo_csv(caminho_arquivo_microplastico)
-        dados_microplasticos.append(dados_microplastico)
-
-    return dados_agua, dados_microplasticos
-
-
-def plotar_varredura(df_agua, dfs_microplasticos, caminho_arquivo_agua):
-    # Encontrar a frequência com o menor valor de S12 em todos os dados
-    menor_freq = df_agua.loc[df_agua['S12'].idxmin(), 'Freq']
-    # Converter a frequência para GHz
-    menor_freq_ghz = menor_freq / 1e9  # Divisão por 1 bilhão para converter para GHz
-
-    # Formatando o valor para exibir 2 casas decimais
-    menor_freq_ghz_str = '{:.2f}'.format(menor_freq_ghz)
-
-    # Inicializar listas para armazenar os valores de S12 na frequência mínima para cada arquivo
+def plotar_varredura(df_agua, df_microplasticos, freq_especifica):
+    freq_especifica = 2337500000
+    freq_especifica_ghz = freq_especifica / 1e9
+    freq_especifica_ghz_str = '{:.2f}'.format(freq_especifica_ghz)
+    
+    # Cálculo da varredura para a frequência específica
+    valor_s12_agua = df_agua.loc[df_agua['Freq'] == freq_especifica, 'S12'].iloc[0]
     varreduras = []
 
-    # Para cada arquivo, calcular a diferença de S12 em relação à água
-    for df_microplastico in dfs_microplasticos:
-        valor_s12_agua = df_agua.loc[df_agua['Freq'] == menor_freq, 'S12'].iloc[0]
-        valor_s12_microplastico = df_microplastico.loc[df_microplastico['Freq'] == menor_freq, 'S12'].iloc[0]
-        varredura = valor_s12_agua - valor_s12_microplastico
-        varreduras.append(varredura)
-
-    # Calcular os valores do eixo x em milímetros
-    primeiro_valor_mm = -9.1
+    for df_microplastico in df_microplasticos:
+        if freq_especifica in df_microplastico['Freq'].values:
+            valor_s12_micro = df_microplastico.loc[df_microplastico['Freq'] == freq_especifica, 'S12'].iloc[0]
+            varredura = valor_s12_agua - valor_s12_micro
+            varreduras.append(varredura)
+    
+    # Calculando valores do eixo X em milímetros
+    primeiro_valor_mm = -7.8
     passo_mm = 1.3
     valores_x_mm = [primeiro_valor_mm + i * passo_mm for i in range(len(varreduras))]
-    # Extrair o número do ressoador e o número da medida do primeiro arquivo
-    match = re.match(r'RESS(\d+)\((\d+)\)-', caminho_arquivo_agua[0])
-    ressoador = match.group(1)
-    # Criar um gráfico de linha
+    
+    # Criando o gráfico Plotly
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=valores_x_mm, y=varreduras, mode='lines', name='Varredura de posição'))
+    fig.add_trace(go.Scatter(x=valores_x_mm, y=varreduras, mode='lines+markers', name='Varredura'))
 
-    # Adicionar rótulos
-    fig.update_layout(title={'text': f'Varredura das posições do ressoador {ressoador} na frequência {menor_freq_ghz_str} GHz', 'x':0.5},
-                   xaxis=dict(autorange=False,  # Colando uma margem extra nas laterais
-                             range=[-9.3, 9.3]),
-                     xaxis_title='Posição (mm)',
+    # Título e rótulos do gráfico
+    match = re.match(r'Cap(\d+)_pos(\d+)\((\d+)\)', os.path.basename(caminho_arquivo_agua))
+    if match:
+        espessura = match.group(1)
+        if espessura == '5':
+            espessura = '5 mm'
+        elif espessura == '10':
+            espessura = '10 mm'
+        medida = match.group(2)
+        titulo = f'Microplástico de {espessura} mm Medida {medida}'
+    
+    fig.update_layout(title=f'Varredura das posições do ressoador na frequência {freq_especifica_ghz_str} GHz',
+                      xaxis_title='Posição (mm)',
                       yaxis_title='Diferença de S12 (dB)')
 
-    # Exibir o gráfico
     fig.show()
 
-# Valores do circuito apenas com água e valores do circuito com microplásticos
-df_agua, dfs_microplasticos = plotar_grafico_csv('RESS5(1)-AGUA.csv', ['RESS5(1)-GAP0.csv','RESS5(1)-FNG1.csv','RESS5(1)-GAP1.csv','RESS5(1)-FNG2.csv','RESS5(1)-GAP2.csv','RESS5(1)-FNG3.csv','RESS5(1)-GAP3.csv','RESS5(1)-FNG4.csv','RESS5(1)-GAP4.csv','RESS5(1)-FNG5.csv','RESS5(1)-GAP5.csv','RESS5(1)-FNG6.csv','RESS5(1)-GAP6.csv','RESS5(1)-FNG7.csv','RESS5(1)-GAP7.csv'])
+# Caminho para o diretório onde os arquivos CSV estão armazenados
+diretorio_arquivos = os.path.join(os.getcwd(), 'Arquivos .csv', 'Medidas')
+todos_arquivos = glob.glob(os.path.join(diretorio_arquivos, '*.csv'))
 
-# Plotar o gráfico
-plotar_varredura(df_agua, dfs_microplasticos, ['RESS5(1)-AGUA.csv'])
+# Pegar o número do Cap e o número dentro dos parênteses desejado através de um input
+num_cap = input("Digite a espessura do microplástico: ")
+num_parenteses = input("Digite o número da medida: ")
+
+# Filtrar arquivos que atendem aos critérios
+arquivos_filtrados = [arquivo for arquivo in todos_arquivos if re.match(rf'Cap{num_cap}_pos\d+\({num_parenteses}\)\.csv', os.path.basename(arquivo))]
+
+# Adicionar o arquivo Cap5_agua.csv se ele existir
+if num_cap == '5':
+    arquivo_agua = os.path.join(diretorio_arquivos, 'Cap5_agua.csv')
+elif num_cap == '10':
+    arquivo_agua = os.path.join(diretorio_arquivos, 'Cap10_agua.csv')
+
+if os.path.exists(arquivo_agua):
+    arquivos_filtrados.append(arquivo_agua)
+
+# Ordenar os arquivos filtrados pela posição
+arquivos_filtrados.sort(key=lambda x: int(re.search(r'_pos(\d+)\(', os.path.basename(x)).group(1)) if '_pos' in os.path.basename(x) else -1)
+
+# Verificar se algum arquivo foi encontrado
+if not arquivos_filtrados:
+    print("Nenhum arquivo encontrado com os critérios especificados.")
+else:
+    caminho_arquivo_agua = arquivo_agua
+    caminho_arquivos_microplasticos = [arquivo for arquivo in arquivos_filtrados if arquivo != arquivo_agua]
+
+    # Processar dados
+    df_agua = processar_arquivo_csv(caminho_arquivo_agua)
+    df_microplasticos = [processar_arquivo_csv(arquivo) for arquivo in caminho_arquivos_microplasticos]
+    
+    # Encontrar a frequência com a maior diferença
+    freq_max_diff = encontrar_frequencia_max_diff(df_agua, df_microplasticos[0])
+    
+    # Plotar o gráfico para a frequência com a maior diferença
+    plotar_varredura(df_agua, df_microplasticos, freq_max_diff)
